@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>无缝管实验费用计算系统 - 完整功能版V6</title>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family:Arial,sans-serif; background:#f0f0f0; min-height:100vh; padding:20px; }
+        .container { max-width:1400px; margin:0 auto; background:#fff; border-radius:12px; box-shadow:0 5px 20px rgba(0,0,0,0.15); overflow:hidden; }
+        .header { background:linear-gradient(135deg,#667eea 0%,#764ba2 100%); color:#fff; padding:30px; text-align:center; }
+        .header h1 { font-size:28px; }
+        .main-content { padding:30px; }
+        .section { margin-bottom:30px; padding:25px; background:#f8f9ff; border-radius:10px; border-left:5px solid #667eea; }
+        .section h2 { color:#333; margin-bottom:15px; font-size:22px; }
+        .tab-container { display:flex; gap:10px; margin-bottom:25px; border-bottom:2px solid #e0e0e0; }
+        .tab { padding:12px 25px; cursor:pointer; border-bottom:3px solid transparent; font-weight:bold; background:none; border-top:none; border-left:none; border-right:none; }
+        .tab:hover { background:#f5f5f5; }
+        .tab.active { border-bottom-color:#667eea; color:#667eea; }
+        .tab-content { display:none; }
+        .tab-content.active { display:block; }
+        .upload-area { border:2px dashed #667eea; border-radius:10px; padding:30px; text-align:center; background:#fff; cursor:pointer; margin-bottom:15px; }
+        .upload-area:hover { background:#f0f4ff; }
+        .button { padding:12px 25px; border-radius:6px; font-size:14px; font-weight:bold; cursor:pointer; border:none; margin-top:8px; margin-right:10px; }
+        .button-primary { background:#667eea; color:#fff; }
+        .button-success { background:#10b981; color:#fff; }
+        .button-danger { background:#ef4444; color:#fff; }
+        .alert { padding:12px 18px; border-radius:6px; margin-bottom:15px; display:flex; gap:12px; }
+        .alert-info { background:#dbeafe; color:#1e40af; border-left:4px solid #3b82f6; }
+        .alert-success { background:#d1fae5; color:#065f46; border-left:4px solid #10b981; }
+        table { width:100%; border-collapse:collapse; background:#fff; border-radius:8px; overflow:hidden; margin-top:15px; }
+        th { background:#667eea; color:#fff; padding:10px; text-align:left; font-weight:bold; }
+        td { padding:8px 10px; border-bottom:1px solid #f0f0f0; }
+        tr:hover { background:#f8f9ff; }
+        .total-box { background:#10b981; color:#fff; padding:18px; border-radius:8px; font-size:20px; font-weight:bold; text-align:center; margin-top:20px; }
+        .product-item { border:1px solid #ddd; border-radius:8px; padding:15px; margin-bottom:15px; background:#fff; }
+        .product-header { font-weight:bold; margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid #eee; }
+        .test-row { display:flex; gap:10px; align-items:center; margin-bottom:8px; }
+        select { padding:8px; border:1px solid #ddd; border-radius:4px; margin-left:10px; }
+        .match-info { background:#e8f5e9; border:1px solid #c8e6c9; border-radius:6px; padding:12px; margin-top:10px; font-size:13px; }
+        .match-info.match-warning { background:#fff3cd; border-color:#ffc107; }
+        .match-success { color:#10b981; font-weight:bold; }
+        .match-error { color:#ef4444; font-weight:bold; }
+        .alert-warning-inline { background:#fff3cd; border:1px solid #ffc107; padding:8px 12px; border-radius:4px; margin-top:8px; font-size:12px; color:#856404; }
+        .cost-note { font-size:12px; color:#f59e0b; margin-left:10px; font-weight:bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔬 无缝管实验费用计算系统</h1>
+            <p style="margin-top:8px;">完整功能版V6 - 数据库已更新（2026-07-01）</p>
+        </div>
+        
+        <div class="main-content">
+            <div class="tab-container">
+                <button class="tab active" onclick="switchTab('upload', this)">📤 上传物料清单</button>
+                <button class="tab" onclick="switchTab('calculate', this)">🧮 费用计算</button>
+                <button class="tab" onclick="switchTab('results', this)">📋 计算结果</button>
+            </div>
+            
+            <!-- Tab 1: 上传物料清单 -->
+            <div id="tab-upload" class="tab-content active">
+                <div class="section">
+                    <h2>📤 上传物料清单</h2>
+                    <button class="button button-success" onclick="loadTestBOM()">📦 加载测试物料清单</button>
+                    <button class="button button-primary" onclick="downloadTemplate()" style="margin-left:10px;">📥 下载Excel模板</button>
+                    
+                    <div class="upload-area" onclick="document.getElementById('bom-file').click()" style="margin-top:20px;">
+                        <div style="font-size:48px; margin-bottom:10px;">📁</div>
+                        <div style="font-size:16px; color:#667eea;">点击此处上传物料清单Excel文件</div>
+                        <input type="file" id="bom-file" accept=".xls,.xlsx" style="display:none;" onchange="handleFileUpload(event)">
+                    </div>
+                    
+                    <div id="bom-status"></div>
+                    <div id="bom-table-container" style="display:none; margin-top:20px;">
+                        <h3>📋 物料清单预览</h3>
+                        <div id="bom-table"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Tab 2: 费用计算 -->
+            <div id="tab-calculate" class="tab-content">
+                <div class="section">
+                    <h2>🧮 费用计算配置</h2>
+                    <div style="margin-bottom:18px;">
+                        <label>选择实验室：
+                            <select id="lab-select" style="padding:8px; border:2px solid #e0e0e0; border-radius:6px; width:200px;" onchange="renderProductTests()">
+                                <option value="yinlong">银隆实验室</option>
+                                <option value="songyang">松阳CNAS实验室</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div id="product-tests-container"></div>
+                    <div style="margin-top:25px;">
+                        <button class="button button-success" onclick="startCalculation()">🔬 开始计算</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Tab 3: 计算结果 -->
+            <div id="tab-results" class="tab-content">
+                <div class="section">
+                    <h2>📋 计算结果</h2>
+                    <div id="optimization-summary"></div>
+                    <div id="results-table"></div>
+                    <div class="total-box" id="results-total" style="display:none;"></div>
+                    <div style="margin-top:20px;">
+                        <button class="button button-primary" onclick="exportToExcel()">📥 导出计算结果Excel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 基础数据（第1部分）
+        const DATABASE = {
+            yinlongLab: [
+                { id:1, name:'化学分析', testFee:200, sampleLength:40, cuttingType:'化学与硬度' },
+                { id:2, name:'室温拉伸', testFee:150, sampleLength:300, cuttingType:'拉伸',
+                    tempOptions:[{condition:'纵向拉伸', price:150},{condition:'横向拉伸', price:200}] 
+                },
+                { id:3, name:'冲击', testFee:150, sampleLength:55, cuttingType:'冲击', 
+                    tempOptions:[
+                        {condition:'室温', price:150, liquidNitrogen:0},
+                        {condition:'-45°C~20°C', price:250, liquidNitrogen:0},
+                        {condition:'-196°C', price:300, liquidNitrogen:800}
+                    ] 
+                },
+                { id:4, name:'压扁', testFee:150, sampleLength:65, cuttingType:'压扁',
+                    sizeOptions:[{condition:'Φ≤168.3mm', price:150},{condition:'Φ>168.3mm', price:200}]
+                },
+                { id:5, name:'扩口', testFee:200, sampleLength:0, cuttingType:'扩口',
+                    sizeOptions:[{condition:'Φ≤168.3mm', price:200},{condition:'Φ>168.3mm', price:400}]
+                },
+                { id:6, name:'晶粒度', testFee:200, sampleLength:30, cuttingType:'金相' },
+                { id:7, name:'非金属夹杂物', testFee:200, sampleLength:30, cuttingType:'金相' },
+                { id:8, name:'铁素体含量', testFee:300, sampleLength:30, cuttingType:'金相' },
+                { id:9, name:'硬度', testFee:100, sampleLength:30, cuttingType:'化学与硬度' },
+                { id:10, name:'晶间腐蚀-E法', testFee:500, sampleLength:100, cuttingType:'腐蚀' },
+                { id:11, name:'晶间腐蚀-C法', testFee:5000, sampleLength:100, cuttingType:'腐蚀' },
+                { id:12, name:'点蚀', testFee:1500, sampleLength:50, cuttingType:'腐蚀',
+                    timeOptions:[{condition:'24h', price:1500},{condition:'72h', price:5000}]
+                },
+                { id:13, name:'沸腾氯化镁', testFee:8000, sampleLength:100, cuttingType:'腐蚀' }
+            ],
+            songyangLabFees: {
+                '化学分析': { base:300, minCharge:300 },
+                '室温拉伸': { base:140 },
+                '高温拉伸': { tempOptions:[
+                    {condition:'36°C到300°C', price:400},
+                    {condition:'301°C到650°C', price:500},
+                    {condition:'651°C到900°C', price:600}
+                ]},
+                '夏比冲击': { base:100, tempOptions:[
+                    {condition:'室温', price:100}, {condition:'室温到-60°C', price:150},
+                    {condition:'-60°C到-180°C', price:200}, {condition:'-196°C', price:300}
+                ]},
+                '弯曲': { base:120 }, '扩口': { base:120 }, '压扁': { base:120 },
+                '硬度': { base:150 },
+                '晶粒度与非金属夹杂物': { base:500 },
+                '腐蚀试验': { base:50 },
+                '中英文报告费': { base:500 },
+                '判定费': { rate:0.1, min:50, max:500 }
+            },
+            cuttingFees: [
+                { type:'化学与硬度', minThickness:0, maxThickness:10, price:10 },
+                { type:'拉伸', minThickness:0, maxThickness:10, price:20 },
+                { type:'冲击', minThickness:0, maxThickness:10, price:25 },
+                { type:'压扁', minThickness:0, maxThickness:10, price:20 },
+                { type:'扩口', minThickness:0, maxThickness:10, price:20 },
+                { type:'金相', minThickness:0, maxThickness:10, price:15 },
+                { type:'腐蚀', minThickness:0, maxThickness:10, price:20 }
+            ],
+            standardTests: {
+                'GB/T14976': ['化学分析', '室温拉伸', '硬度'],
+                'GB13296': ['化学分析', '室温拉伸', '压扁', '硬度'],
+                'ASTM A312': ['化学分析', '室温拉伸', '压扁', '硬度']
+            },
+            lotRules: {
+                'GB/T14976': { size:200 },
+                'GB13296': { size:200 },
+                'ASTM A312': { size:200 }
+            }
+        };
+        
+        const testBOM = [
+            { standard:'GB/T14976', material:'TP304', quantity:500, length:6, od:60.3, wt:3.91 },
+            { standard:'GB13296', material:'TP316', quantity:450, length:4, od:88.9, wt:7.62 },
+            { standard:'ASTM A312', material:'S32750', quantity:300, length:5, od:114.3, wt:6.02 }
+        ];
+        
+        let currentBOM = [];
+        let productTestConfigs = [];
+        let calculationResults = [];
+        
+        console.log('✅ V6第1部分加载完成：完整数据库');
+    
+        function switchTab(tabName, element) {
+            const tabs = document.querySelectorAll('.tab');
+            const contents = document.querySelectorAll('.tab-content');
+            tabs.forEach(t => t.classList.remove('active'));
+            contents.forEach(c => c.classList.remove('active'));
+            element.classList.add('active');
+            document.getElementById('tab-' + tabName).classList.add('active');
+        }
+        
+        function loadTestBOM() {
+            currentBOM = JSON.parse(JSON.stringify(testBOM));
+            renderBOMTable();
+            document.getElementById('bom-table-container').style.display = 'block';
+            document.getElementById('bom-status').innerHTML = '<div class="alert alert-success"><span>✅</span><div>测试物料清单已加载！3个产品项次</div></div>';
+            renderProductTests();
+        }
+        
+        function renderBOMTable() {
+            let html = '<table><thead><tr><th>序号</th><th>产品标准</th><th>材质</th><th>数量(支)</th><th>长度(m)</th><th>外径(mm)</th><th>壁厚(mm)</th></tr></thead><tbody>';
+            currentBOM.forEach((item, index) => {
+                html += '<tr><td>' + (index+1) + '</td><td>' + item.standard + '</td><td>' + item.material + '</td><td>' + item.quantity + '</td><td>' + item.length + '</td><td>' + item.od + '</td><td>' + item.wt + '</td></tr>';
+            });
+            html += '</tbody></table>';
+            document.getElementById('bom-table').innerHTML = html;
+        }
+    
+
+        function downloadTemplate() {
+            const templateData = [
+                { '产品标准':'GB/T14976', '材质':'TP304', '数量':500, '长度':6, '外径 mm':60.3, '壁厚 mm':3.91 },
+                { '产品标准':'ASTM A312', '材质':'TP316L', '数量':300, '长度':6, '外径 mm':114.3, '壁厚 mm':6.02 }
+            ];
+            const ws = XLSX.utils.json_to_sheet(templateData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, '物料清单');
+            XLSX.writeFile(wb, '无缝管实验费用计算_物料清单模板.xlsx');
+        }
+
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, {type:'array'});
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+                    currentBOM = jsonData.map(row => ({
+                        standard: row['产品标准'] || row['标准'] || row['Standard'] || '',
+                        material: row['材质'] || row['Material'] || '',
+                        quantity: parseInt(row['数量'] || row['支数'] || row['Qty'] || row['Quantity']) || 1,
+                        length: parseFloat(row['长度'] || row['长度 m'] || row['Length'] || row['Length m']) || 6,
+                        od: parseFloat(row['外径 mm'] || row['外径'] || row['OD'] || row['OD mm']) || 0,
+                        wt: parseFloat(row['壁厚 mm'] || row['壁厚'] || row['WT'] || row['WT mm']) || 0
+                    }));
+                    renderBOMTable();
+                    document.getElementById('bom-table-container').style.display = 'block';
+                    document.getElementById('bom-status').innerHTML = '<div class="alert alert-success"><span>✅</span><div>已解析 ' + currentBOM.length + ' 行数据</div></div>';
+                    renderProductTests();
+                } catch (err) { alert('Excel解析失败：' + err.message); }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+        }
+        function formatNum(value, digits=2) {
+            const n = Number(value) || 0;
+            return Number.isInteger(n) ? String(n) : n.toFixed(digits).replace(/\.00$/, '').replace(/0$/, '');
+        }
+        function getStandardKey(input) {
+            if (!input) return '';
+            const normalized = String(input).replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+            const aliases = {'GBT14976':'GB/T14976','GB14976':'GB/T14976','GB13296':'GB13296','GBT13296':'GB13296','GBT218331':'GB/T21833.1','GB218331':'GB/T21833.1','GBT218332':'GB/T21833.2','GB218332':'GB/T21833.2','ASTMA790':'ASTM A790','A790':'ASTM A790','ASTMA789':'ASTM A789','A789':'ASTM A789','ASTMA312':'ASTM A312','A312':'ASTM A312','ASTMA213':'ASTM A213/A269','A213':'ASTM A213/A269','ASTMA269':'ASTM A213/A269','A269':'ASTM A213/A269'};
+            if (aliases[normalized]) return aliases[normalized];
+            for (let std in DATABASE.standardTests) {
+                const normalizedStd = std.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+                if (normalizedStd.includes(normalized) || normalized.includes(normalizedStd)) return std;
+            }
+            return input;
+        }
+        function matchStandard(input) { return getStandardKey(input); }
+
+        function getLotInfo(standard, od, wt, quantity) {
+            const key = getStandardKey(standard); let size = 200; let desc = '默认规则：200支/组（标准未完整录入时采用默认值）';
+            const D = Number(od)||0, S = Number(wt)||0;
+            if (key === 'GB13296') { if (D<=76 && S<=3) {size=400; desc='GB13296：D≤76mm且S≤3mm，400支/组';} else {size=200; desc='GB13296：其他规格，200支/组';} }
+            else if (key === 'GB/T14976' || key === 'GB/T 14976') { if (D<=76 && S<=3) {size=500; desc='GB/T14976：D≤76mm且S≤3mm，500支/组';} else if (D>351) {size=50; desc='GB/T14976：D＞351mm，50支/组';} else {size=200; desc='GB/T14976：其他规格，200支/组';} }
+            else if (key === 'GB/T21833.1') { if (D<=25) {size=400; desc='GB/T21833.1：D≤25mm，400支/组';} else if (D<=50) {size=200; desc='GB/T21833.1：25mm＜D≤50mm，200支/组';} else {size=100; desc='GB/T21833.1：D＞50mm，100支/组';} }
+            else if (key === 'GB/T21833.2') { if (D<=76 && S<=3) {size=500; desc='GB/T21833.2：D≤76mm且S≤3mm，500支/组';} else if (D>351) {size=50; desc='GB/T21833.2：D＞351mm，50支/组';} else {size=200; desc='GB/T21833.2：其他规格，200支/组';} }
+            else if (key === 'ASTM A790' || key === 'ASTM A312') { if (D<60.3) {size=400; desc=key+'：外径<60.3mm，400支/组';} else if (D<=141.3) {size=200; desc=key+'：60.3mm≤外径≤141.3mm，200支/组';} else {size=100; desc=key+'：外径>141.3mm，100支/组';} }
+            else if (key === 'ASTM A789') { if (D<=25.4) {size=125; desc='ASTM A789：D≤25.4mm，125支/组';} else if ((D>25.4 && D<50.8) || (D>25.4 && S<5.1)) {size=75; desc='ASTM A789：25.4<D<50.8 或 D>25.4且S<5.1，75支/组';} else {size=50; desc='ASTM A789：D≥50.8且S≥5.1，50支/组';} }
+            else if (key === 'ASTM A213/A269') { if (D<25) {size=125; desc='ASTM A213/A269：外径<25mm，125支/组';} else if (D<=50) {size=75; desc='ASTM A213/A269：25mm≤外径≤50mm，75支/组';} else {size=50; desc='ASTM A213/A269：外径>50mm，50支/组';} }
+            return { standardKey:key, size:size, count:Math.max(1, Math.ceil((Number(quantity)||0)/size)), desc:desc };
+        }
+
+        function getAllTestOptions() {
+            const set = new Set();
+            DATABASE.yinlongLab.forEach(t => set.add(t.name));
+            Object.keys(DATABASE.songyangLabFees).forEach(n => {
+                if (n !== '中英文报告费' && n !== '判定费') set.add(n);
+            });
+            return Array.from(set).sort((a,b)=>a.localeCompare(b,'zh-CN'));
+        }
+        function getYinlongDef(testName) { return DATABASE.yinlongLab.find(t => t.name === testName) || null; }
+        function getSongyangFeeInfo(testName) {
+            const map = {'冲击':'夏比冲击','晶粒度':'晶粒度与非金属夹杂物','非金属夹杂物':'晶粒度与非金属夹杂物','铁素体含量':'晶粒度与非金属夹杂物','晶间腐蚀-E法':'腐蚀试验','晶间腐蚀-C法':'腐蚀试验','点蚀':'腐蚀试验','沸腾氯化镁':'腐蚀试验'};
+            return DATABASE.songyangLabFees[testName] || DATABASE.songyangLabFees[map[testName]] || null;
+        }
+        function getTestDefinition(testName) {
+            const y = getYinlongDef(testName); if (y) return y;
+            const fallback = {'高温拉伸':{name:'高温拉伸',sampleLength:300,cuttingType:'拉伸'},'夏比冲击':{name:'夏比冲击',sampleLength:55,cuttingType:'冲击'},'弯曲':{name:'弯曲',sampleLength:65,cuttingType:'压扁'},'晶粒度与非金属夹杂物':{name:'晶粒度与非金属夹杂物',sampleLength:30,cuttingType:'金相'},'腐蚀试验':{name:'腐蚀试验',sampleLength:100,cuttingType:'腐蚀'}};
+            return fallback[testName] || {name:testName,sampleLength:0,cuttingType:'化学与硬度'};
+        }
+        function getOptionChoices(testName, lab, bomItem) {
+            const y = getYinlongDef(testName), sy = getSongyangFeeInfo(testName); let choices=[];
+            if (lab === 'songyang' && sy && sy.tempOptions) choices = sy.tempOptions; else if (y && y.tempOptions) choices = y.tempOptions; else if (y && y.sizeOptions) choices = y.sizeOptions; else if (y && y.timeOptions) choices = y.timeOptions;
+            return choices || [];
+        }
+        function defaultOptionForTest(testName, lab, bomItem) {
+            const choices = getOptionChoices(testName, lab, bomItem); if (!choices.length) return '';
+            if ((testName === '压扁' || testName === '扩口') && bomItem && Number(bomItem.od) > 168.3) { const big = choices.find(c => String(c.condition).includes('>168.3') || String(c.condition).includes('＞168.3')); if (big) return big.condition; }
+            return choices[0].condition;
+        }
+        function renderOptionSelect(productIndex, key, testName, selected, lab, bomItem) {
+            const choices = getOptionChoices(testName, lab, bomItem); if (!choices.length) return '';
+            const value = selected || defaultOptionForTest(testName, lab, bomItem);
+            let html = '<select onchange="updateOption(' + productIndex + ', ' + JSON.stringify(key) + ', this.value)">';
+            choices.forEach(opt => { const label = opt.condition + ' / ' + opt.price + '元' + (opt.liquidNitrogen ? ' + 液氮' + opt.liquidNitrogen + '元/订单' : ''); html += '<option value="' + escapeHtml(opt.condition) + '"' + (opt.condition === value ? ' selected' : '') + '>' + escapeHtml(label) + '</option>'; });
+            html += '</select>'; return html;
+        }
+
+        function ensureProductConfigs() {
+            const oldConfigs = productTestConfigs || [];
+            productTestConfigs = currentBOM.map((bomItem, productIndex) => {
+                const matchedStandard = matchStandard(bomItem.standard);
+                const requiredTests = DATABASE.standardTests[matchedStandard] || [];
+                const old = oldConfigs.find(c => c.productIndex === productIndex) || {};
+                return {productIndex, standard:bomItem.standard, matchedStandard, requiredTests, customTests:old.customTests||[], tempSelections:old.tempSelections||{}, optionSelections:old.optionSelections||{}, lotInfo:getLotInfo(bomItem.standard,bomItem.od,bomItem.wt,bomItem.quantity)};
+            });
+        }
+
+        function renderProductTests() {
+            if (currentBOM.length === 0) { document.getElementById('product-tests-container').innerHTML = '<div class="alert alert-info"><span>ℹ️</span><div>请先上传或加载物料清单。</div></div>'; return; }
+            const lab = document.getElementById('lab-select').value; ensureProductConfigs(); let html='';
+            currentBOM.forEach((bomItem, productIndex) => {
+                const config = productTestConfigs[productIndex], lot = config.lotInfo;
+                const isStandardMatched = config.matchedStandard && config.matchedStandard !== '';
+                const isDefaultRule = lot.desc.includes('默认规则');
+                
+                // 构建标准匹配信息
+                let matchInfoHtml = '<div class="' + (isDefaultRule ? 'match-info match-warning' : 'match-info') + '">';
+                matchInfoHtml += '<strong>标准匹配：</strong>' + escapeHtml(bomItem.standard);
+                if (isStandardMatched) {
+                    matchInfoHtml += ' → <span class="match-success">' + escapeHtml(config.matchedStandard) + '</span>';
+                } else {
+                    matchInfoHtml += ' → <span class="match-error">❌ 未匹配</span>';
+                }
+                matchInfoHtml += '<br>';
+                
+                // 组批计算信息
+                if (isDefaultRule) {
+                    matchInfoHtml += '<strong>⚠️ 组批计算（使用默认规则）：</strong> ' + escapeHtml(lot.desc);
+                    matchInfoHtml += '<div class="alert-warning-inline">⚠️ 注意：当前标准未完整录入，已自动使用默认组批规则（200支/组）。如需精确计算，请更新标准库。</div>';
+                } else {
+                    matchInfoHtml += '<strong>组批计算：</strong> ' + escapeHtml(lot.desc);
+                }
+                matchInfoHtml += '；组批数量 = ceil(' + escapeHtml(bomItem.quantity) + ' / ' + lot.size + ') = <b>' + lot.count + '组</b>';
+                matchInfoHtml += '</div>';
+                
+                html += '<div class="product-item"><div class="product-header">产品项次 ' + (productIndex+1) + ' ｜ 材质：' + escapeHtml(bomItem.material) + ' ｜ 规格：Φ' + formatNum(bomItem.od) + ' × ' + formatNum(bomItem.wt) + ' mm × ' + formatNum(bomItem.length) + ' m ｜ 数量：' + escapeHtml(bomItem.quantity) + '支</div>';
+                html += matchInfoHtml;
+                html += '<h4 style="margin-top:12px;">强制实验</h4>';
+                if (!config.requiredTests.length) html += '<div class="alert alert-info"><span>⚠️</span><div>该标准未录入强制实验，请用下方下拉菜单添加额外实验。</div></div>';
+                config.requiredTests.forEach(testName => { const key='req:'+testName, selected=config.optionSelections[key] || defaultOptionForTest(testName,lab,bomItem); html += '<div class="test-row"><span style="min-width:120px;">' + escapeHtml(testName) + '</span>' + renderOptionSelect(productIndex,key,testName,selected,lab,bomItem) + '<span style="color:#10b981;">✓ 必做</span></div>'; });
+                html += '<h4 style="margin-top:12px;">额外实验</h4>';
+                const options = getAllTestOptions();
+                config.customTests.forEach((custom, idx) => { const selectedName=custom.name||options[0], optKey='custom:'+idx; html += '<div class="test-row"><select onchange="updateCustomTest(' + productIndex + ', ' + idx + ', this.value)">'; options.forEach(name => { html += '<option value="' + escapeHtml(name) + '"' + (name===selectedName ? ' selected' : '') + '>' + escapeHtml(name) + '</option>'; }); html += '</select>' + renderOptionSelect(productIndex,optKey,selectedName,config.optionSelections[optKey],lab,bomItem) + '<button class="button button-danger" style="padding:6px 10px;" onclick="removeCustomTest(' + productIndex + ', ' + idx + ')">删除</button></div>'; });
+                html += '<button class="button button-primary" onclick="addCustomTest(' + productIndex + ')">➕ 添加额外实验</button></div>';
+            });
+            document.getElementById('product-tests-container').innerHTML = html;
+        }
+
+        function addCustomTest(productIndex) { if (!productTestConfigs[productIndex]) ensureProductConfigs(); const options=getAllTestOptions(); if (!options.length) { showAlert('error', '❌ 没有可用的实验项目！'); return; } productTestConfigs[productIndex].customTests.push({name:options[0]}); renderProductTests(); showAlert('success', '✅ 已添加额外实验: ' + options[0]); }
+        function removeCustomTest(productIndex, customIndex) { productTestConfigs[productIndex].customTests.splice(customIndex,1); renderProductTests(); }
+        function updateCustomTest(productIndex, customIndex, testName) { const cfg=productTestConfigs[productIndex]; cfg.customTests[customIndex].name=testName; delete cfg.optionSelections['custom:'+customIndex]; renderProductTests(); }
+        function updateOption(productIndex, key, value) { productTestConfigs[productIndex].optionSelections[key]=value; productTestConfigs[productIndex].tempSelections[key.replace(/^req:/,'')]=value; }
+        function updateTemp(productIndex, testName, temp) { updateOption(productIndex, 'req:'+testName, temp); }
+
+        function getSelectedOption(productIndex, key, testName, lab, bomItem) { const cfg=productTestConfigs[productIndex]; return (cfg && cfg.optionSelections[key]) || defaultOptionForTest(testName,lab,bomItem); }
+        function getTestFee(testName, lab, bomItem, selectedCondition) {
+            const y=getYinlongDef(testName);
+            if (lab === 'songyang') {
+                const sy=getSongyangFeeInfo(testName); if (!sy) return 0;
+                if (sy.tempOptions && selectedCondition) { const opt=sy.tempOptions.find(o=>o.condition===selectedCondition); return opt ? opt.price : sy.tempOptions[0].price; }
+                return sy.base || sy.minCharge || 0;
+            }
+            if (!y) return 0;
+            const choiceArrays=[y.tempOptions,y.sizeOptions,y.timeOptions].filter(Boolean);
+            for (const arr of choiceArrays) { if (selectedCondition) { const opt=arr.find(o=>o.condition===selectedCondition); if (opt) return opt.price; } }
+            if (y.sizeOptions && (testName==='压扁' || testName==='扩口')) { return Number(bomItem.od)>168.3 ? y.sizeOptions[1].price : y.sizeOptions[0].price; }
+            return y.testFee || 0;
+        }
+        function hasLiquidNitrogen(testName, lab, selectedCondition) { return lab === 'yinlong' && (testName==='冲击' || testName==='夏比冲击') && selectedCondition === '-196°C'; }
+        function getSampleLength(testName, bomItem) { 
+            // 特殊规则：扩口实验的取样长度 = 1.5 × 外径
+            if (testName==='扩口') {
+                const od = Number(bomItem.od) || 0;
+                if (od <= 0) {
+                    console.warn('⚠️ 扩口实验的外径(OD)无效:', bomItem.od);
+                    return 0;
+                }
+                const length = Math.round(od * 1.5);
+                console.log('📏 扩口实验取样长度计算: OD=' + od + 'mm, 取样长度=' + length + 'mm (1.5×OD)');
+                return length;
+            }
+            // 其他实验使用标准取样长度
+            const def = getTestDefinition(testName);
+            return Number(def.sampleLength) || 0; 
+        }
+        function getCuttingFee(cuttingType, thickness) { const feeInfo=DATABASE.cuttingFees.find(f => f.type===cuttingType && thickness>=f.minThickness && thickness<f.maxThickness); return feeInfo ? feeInfo.price : 20; }
+        function getOptimizeGroup(testName) {
+            if (testName === '压扁' || testName === '弯曲') return 'flatten';
+            if (['室温拉伸','高温拉伸','冲击','夏比冲击','化学分析','硬度'].includes(testName)) return 'main_shared';
+            if (['晶粒度','非金属夹杂物','铁素体含量','晶粒度与非金属夹杂物'].includes(testName)) return 'metallography';
+            if (testName === '扩口') return 'flaring';
+            if (['晶间腐蚀-E法','晶间腐蚀-C法','点蚀','沸腾氯化镁','腐蚀试验'].includes(testName)) return 'corrosion';
+            return 'other_' + testName;
+        }
+        function optimizeLengthForProduct(rows) {
+            const groups={}; rows.forEach(r=>{ const g=r.optimizeGroup; if(!groups[g]) groups[g]=[]; groups[g].push(r); });
+            let optimizedPerGroupTotal=0, notes=[];
+            Object.keys(groups).forEach(g=>{ const maxLen=Math.max(...groups[g].map(r=>r.sampleLength||0)); const reps=Math.max(...groups[g].map(r=>r.lotCount||1)); const groupTotal=maxLen*reps; optimizedPerGroupTotal += groupTotal; groups[g].forEach(r=>{ r.optimizedGroup=g; r.optimizedGroupLength=groupTotal; }); notes.push(g + '：取最大' + maxLen + 'mm × ' + reps + '组 = ' + groupTotal + 'mm（包含：' + groups[g].map(r=>r.test).join('、') + '）'); });
+            return {total:optimizedPerGroupTotal, notes};
+        }
+
+        function startCalculation() {
+            if (currentBOM.length === 0) { alert('请先加载物料清单！'); return; }
+            
+            // 验证BOM数据的完整性
+            const invalidItems = currentBOM.filter(item => {
+                const od = Number(item.od) || 0;
+                const wt = Number(item.wt) || 0;
+                return od <= 0 || wt <= 0;
+            });
+            
+            if (invalidItems.length > 0) {
+                const warning = '⚠️ 警告：以下产品项次的外径或壁厚无效：\n' + 
+                    invalidItems.map((item, idx) => 
+                        `产品${currentBOM.indexOf(item)+1}: ${item.standard} ${item.material} (OD=${item.od}, WT=${item.wt})`
+                    ).join('\n') + 
+                    '\n\n扩口等实验可能无法正确计算取样长度。是否继续？';
+                if (!confirm(warning)) return;
+            }
+            
+            const lab=document.getElementById('lab-select').value; 
+            ensureProductConfigs(); 
+            calculationResults=[]; 
+            let grandTotal=0; 
+            let liquidNitrogenFee=0; 
+            let orderTestFee=0; 
+            let productRowsMap={};
+            
+            console.log('🚀 开始计算...', { lab, bomCount: currentBOM.length });
+            
+            currentBOM.forEach((bomItem, productIndex) => {
+                const cfg=productTestConfigs[productIndex], lot=cfg.lotInfo; 
+                const tests=[];
+                cfg.requiredTests.forEach(name=>tests.push({name, key:'req:'+name, required:true})); 
+                cfg.customTests.forEach((c,idx)=>tests.push({name:c.name, key:'custom:'+idx, required:false}));
+                productRowsMap[productIndex]=[];
+                
+                console.log(`📦 产品${productIndex+1}:`, { material: bomItem.material, od: bomItem.od, wt: bomItem.wt, testCount: tests.length });
+                
+                tests.forEach(t => {
+                    const def=getTestDefinition(t.name), selected=getSelectedOption(productIndex,t.key,t.name,lab,bomItem);
+                    const fee=getTestFee(t.name,lab,bomItem,selected), sampleLength=getSampleLength(t.name,bomItem), cuttingFee=getCuttingFee(def.cuttingType,bomItem.wt);
+                    
+                    if (hasLiquidNitrogen(t.name,lab,selected) && liquidNitrogenFee === 0) liquidNitrogenFee = 800;
+                    
+                    const totalTestFee=fee*lot.count, totalCuttingFee=cuttingFee*lot.count, originalCuttingLength=sampleLength*lot.count, subtotal=totalTestFee+totalCuttingFee;
+                    
+                    // 验证数据完整性
+                    if (sampleLength <= 0 && t.name === '扩口') {
+                        console.warn(`⚠️ 产品${productIndex+1}的扩口实验取样长度为0，请检查OD值:`, bomItem.od);
+                    }
+                    
+                    const row={
+                        productIndex:productIndex+1, 
+                        material:bomItem.material, 
+                        od:bomItem.od, 
+                        wt:bomItem.wt, 
+                        spec:'Φ'+formatNum(bomItem.od)+'×'+formatNum(bomItem.wt)+'mm', 
+                        standard:bomItem.standard, 
+                        test:t.name, 
+                        option:selected, 
+                        required:t.required, 
+                        lotSize:lot.size, 
+                        lotCount:lot.count, 
+                        lotDesc:lot.desc, 
+                        testFee:fee, 
+                        cuttingType:def.cuttingType, 
+                        cuttingFee, 
+                        sampleLength, 
+                        originalCuttingLength, 
+                        optimizeGroup:getOptimizeGroup(t.name), 
+                        totalTestFee, 
+                        totalCuttingFee, 
+                        subtotal
+                    };
+                    
+                    calculationResults.push(row); 
+                    productRowsMap[productIndex].push(row); 
+                    grandTotal += subtotal; 
+                    orderTestFee += totalTestFee;
+                    
+                    console.log(`  ✓ ${t.name}: sampleLength=${sampleLength}mm, originalCuttingLength=${originalCuttingLength}mm, fee=${fee}元`);
+                });
+            });
+            Object.keys(productRowsMap).forEach(idx=>{ const opt=optimizeLengthForProduct(productRowsMap[idx]); productRowsMap[idx].forEach(r=>{ r.productOptimizedLength=opt.total; r.optimizationNotes=opt.notes; }); });
+            if (liquidNitrogenFee > 0) { calculationResults.push({productIndex:'订单级', material:'订单级', od:'订单级', wt:'订单级', test:'液氮费（整个物料清单只收一次）', option:'-196°C冲击', lotCount:1, totalTestFee:liquidNitrogenFee, totalCuttingFee:0, sampleLength:0, originalCuttingLength:0, productOptimizedLength:0, subtotal:liquidNitrogenFee, isOrderLevel:true}); grandTotal += liquidNitrogenFee; }
+            if (lab === 'songyang') { calculationResults.push({productIndex:'订单级',material:'订单级',od:'订单级',wt:'订单级',test:'中英文报告费',option:'整个订单一次收费',lotCount:1,totalTestFee:500,totalCuttingFee:0,sampleLength:0,originalCuttingLength:0,productOptimizedLength:0,subtotal:500,isOrderLevel:true}); grandTotal += 500; let judgeFee=Math.max(50, Math.min(500, orderTestFee*0.1)); calculationResults.push({productIndex:'订单级',material:'订单级',od:'订单级',wt:'订单级',test:'判定费（检测费10%，最低50最高500）',option:'整个订单一次收费',lotCount:1,totalTestFee:judgeFee,totalCuttingFee:0,sampleLength:0,originalCuttingLength:0,productOptimizedLength:0,subtotal:judgeFee,isOrderLevel:true}); grandTotal += judgeFee; }
+            renderResults(calculationResults, grandTotal);
+        }
+
+        function renderResults(results, total) {
+            document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active')); document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
+            document.querySelectorAll('.tab')[2].classList.add('active'); document.getElementById('tab-results').classList.add('active');
+            const realRows=results.filter(r=>typeof r.productIndex==='number'); const originalTotal=realRows.reduce((s,r)=>s+(r.originalCuttingLength||0),0); const byProduct={}; realRows.forEach(r=>{ if(!byProduct[r.productIndex]) byProduct[r.productIndex]=r.productOptimizedLength||0; }); const optimizedTotal=Object.values(byProduct).reduce((s,v)=>s+(v||0),0);
+            const optDetails = Object.keys(byProduct).map(pid => { const row = realRows.find(r => r.productIndex == pid); return '产品' + pid + '（' + row.material + ' Φ' + row.od + '×' + row.wt + '）：优化后' + byProduct[pid] + 'mm'; }).join('；');
+            document.getElementById('optimization-summary').innerHTML = '<div class="alert alert-info"><span>📏</span><div><b>线切割长度优化：</b>原始累计 ' + originalTotal + ' mm，优化后 ' + optimizedTotal + ' mm，节省 ' + Math.max(0, originalTotal-optimizedTotal) + ' mm。<br><b>分项：</b>' + escapeHtml(optDetails) + '<br>优化规则：拉伸/冲击/化学/硬度可共享主试样段；金相类共享；压扁/弯曲单独；腐蚀类共享。</div></div>';
+            let html='<table><tr><th>产品项次</th><th>材质</th><th>外径(mm)</th><th>壁厚(mm)</th><th>实验</th><th>选项</th><th>组批</th><th>单次取样长度(mm)</th><th>原始线切割长度(mm)</th><th>优化后产品总长度(mm)</th><th>实验费</th><th>切割费</th><th>小计</th></tr>';
+            results.forEach(r=>{ html += '<tr><td>' + escapeHtml(r.productIndex) + '</td><td>' + escapeHtml(r.material||'') + '</td><td>' + escapeHtml(r.od||'') + '</td><td>' + escapeHtml(r.wt||'') + '</td><td>' + escapeHtml(r.test) + '</td><td>' + escapeHtml(r.option||'') + '</td><td>' + escapeHtml(r.lotCount||1) + '组</td><td>' + escapeHtml(r.sampleLength||0) + '</td><td>' + escapeHtml(r.originalCuttingLength||0) + '</td><td>' + escapeHtml(r.productOptimizedLength||0) + '</td><td>' + formatNum(r.totalTestFee||0) + '元</td><td>' + formatNum(r.totalCuttingFee||0) + '元</td><td>' + formatNum(r.subtotal||0) + '元</td></tr>'; });
+            html+='</table>'; document.getElementById('results-table').innerHTML=html; document.getElementById('results-total').innerHTML='💰 总费用：' + total.toLocaleString() + '元'; document.getElementById('results-total').style.display='block';
+        }
+
+        function exportToExcel() {
+            if (calculationResults.length === 0) { alert('没有计算结果可导出！'); return; }
+            const exportData=calculationResults.map(r=>({'产品项次':r.productIndex,'材质':r.material,'外径(mm)':r.od,'壁厚(mm)':r.wt,'实验项目':r.test,'选项':r.option||'','组批数量':r.lotCount,'组批规则':r.lotDesc||'','单次取样长度(mm)':r.sampleLength||0,'原始线切割长度(mm)':r.originalCuttingLength||0,'优化后产品总长度(mm)':r.productOptimizedLength||0,'实验费(元)':r.totalTestFee||0,'切割费(元)':r.totalCuttingFee||0,'小计(元)':r.subtotal||0}));
+            const ws=XLSX.utils.json_to_sheet(exportData); const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'计算结果'); XLSX.writeFile(wb,'无缝管实验费用计算结果_V6_修复版.xlsx');
+        }
+        console.log('✅ 无缝管实验费用计算系统 - 完整功能版V6');
+        console.log('✅ 数据库已更新（2026-07-01）');
+        console.log('✅ 银隆实验室：13个实验项目');
+        console.log('✅ 松阳CNAS实验室：完整收费标准');
+        console.log('✅ 液氮费逻辑正确：整个订单只收一次800元');
+        console.log('✅ 系统就绪！');
+    </script>
+</body>
+</html>
